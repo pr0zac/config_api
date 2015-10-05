@@ -44,7 +44,7 @@ func FindNode(config string) (*Node, error) {
 }
 
 /*
- * Create: CRUD function to handle creating new node, will fail if node already exists
+ * Create: CRUD function to handle creating new node
  * takes:
  *   URI path is used as identifier to node
  * returns:
@@ -89,7 +89,7 @@ func Create(url string, body io.Reader) int {
  * takes:
  *   URI path is used as identifier to node
  * returns:
- *   JSON encoded node tree
+ *   200 plus JSON encoded node tree as bytes
  *   400 if unknown error
  *   404 if node is not found
  */
@@ -109,7 +109,7 @@ func Read(url string) ([]byte, int) {
 }
 
 /*
- * Update: CRUD function to handle updating a node, will fail if node does not exist
+ * Update: CRUD function to handle updating a node
  * takes:
  *   URI path is used as identifier to node
  * returns:
@@ -148,7 +148,7 @@ func Update(url string, body io.Reader) int {
 }
 
 /*
- * Delete: http function to handle deleting a node, will fail if node does not exist
+ * Delete: http function to handle deleting a node
  * takes:
  *   URI path is used as identifier to node
  * returns:
