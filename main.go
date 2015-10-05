@@ -2,11 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"path"
 	"strings"
+	"sync"
 )
 
 type Node struct {
@@ -15,6 +19,8 @@ type Node struct {
 }
 
 var Root *Node
+var File string
+var FileMutex sync.Mutex
 
 /*
  * FindNode: finds a node in the config
@@ -28,7 +34,9 @@ func FindNode(config string) (*Node, error) {
 	names := strings.Split(config, "/")
 
 	node := Root
-	if node != nil {
+	if node == nil {
+		return nil, fmt.Errorf("Config %s not found", config)
+	} else {
 		for _, name := range names {
 			if len(name) > 0 { // this check lets us handle extra /'s
 				node = node.Children[name]
@@ -38,8 +46,6 @@ func FindNode(config string) (*Node, error) {
 			}
 		}
 		return node, nil
-	} else {
-		return nil, fmt.Errorf("Config %s not found", config)
 	}
 }
 
@@ -195,9 +201,40 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 			w.Write(result)
 		}
 	}
+
+	go func() {
+		FileMutex.Lock()
+		bytes, err := json.Marshal(Root)
+		if err != nil {
+			panic(err)
+		}
+		err = ioutil.WriteFile(File, bytes, 0644)
+		if err != nil {
+			panic(err)
+		}
+		FileMutex.Unlock()
+	}()
 }
 
 func main() {
+	flag.StringVar(&File, "config", "config.json", "Config.json file to read")
+	flag.StringVar(&File, "c", "config.json", "Config.json file to read")
+	flag.Parse()
+
+	if _, err := os.Stat(File); !os.IsNotExist(err) {
+		config, err := os.Open(File)
+		if err != nil {
+			panic(err)
+		}
+		saved_root := new(Node)
+		decoder := json.NewDecoder(config)
+		if err = decoder.Decode(saved_root); err != nil {
+			panic(err)
+		}
+		Root = saved_root
+		config.Close()
+	}
+
 	http.HandleFunc("/", Handle)
 	http.ListenAndServe(":8080", nil)
 }
