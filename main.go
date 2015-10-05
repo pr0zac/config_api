@@ -4,14 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	hr "github.com/julienschmidt/httprouter"
-	"log"
 	"net/http"
 	"path"
 	"strings"
 )
 
 type Node struct {
-	Value    string
+	Value    interface{}
 	Children map[string]*Node
 }
 
@@ -38,11 +37,9 @@ func (cs *ConfigServer) FindNode(config string) (*Node, error) {
 	names := strings.Split(config, "/")
 
 	node := cs.Root
-	log.Printf("node: %v", node)
 	if node != nil {
-		log.Printf("len names: %d  names: %v", len(names), names)
 		for _, name := range names {
-			if len(name) > 0 {
+			if len(name) > 0 { // this check lets us handle trailing /'s
 				node = node.Children[name]
 				if node == nil {
 					return nil, fmt.Errorf("Config %s not found", config)
@@ -67,15 +64,13 @@ func (cs *ConfigServer) FindNode(config string) (*Node, error) {
  */
 func (cs *ConfigServer) Create(w http.ResponseWriter, r *http.Request, p hr.Params) {
 	config := p.ByName("config")[1:]
-	log.Printf("In Create with config: %s", config)
 	node := new(Node)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(node)
-	log.Printf("Node: %v  err: %v", node, err)
 
 	if err != nil {
 		cs.ErrorHandler(w, http.StatusBadRequest, err)
-	} else if config == "" {
+	} else if config == "" { // creating root node so we can't find a parent
 		if cs.Root != nil {
 			cs.ErrorHandler(w, http.StatusConflict, err)
 		} else {
@@ -85,7 +80,6 @@ func (cs *ConfigServer) Create(w http.ResponseWriter, r *http.Request, p hr.Para
 	} else {
 		config, name := path.Split(config)
 		parent, err := cs.FindNode(config)
-		log.Printf("Parent: %v  err: %v", parent, err)
 
 		if err != nil {
 			cs.ErrorHandler(w, http.StatusNotFound, err)
@@ -132,15 +126,13 @@ func (cs *ConfigServer) Read(w http.ResponseWriter, r *http.Request, p hr.Params
  */
 func (cs *ConfigServer) Update(w http.ResponseWriter, r *http.Request, p hr.Params) {
 	config := p.ByName("config")[1:]
-	log.Printf("In Update with config: %s", config)
 	node := new(Node)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(node)
-	log.Printf("Node: %v  err: %v", node, err)
 
 	if err != nil {
 		cs.ErrorHandler(w, http.StatusBadRequest, err)
-	} else if config == "" {
+	} else if config == "" {  // updating root node so we can't find a parent
 		if cs.Root == nil {
 			cs.ErrorHandler(w, http.StatusNotFound, err)
 		} else {
@@ -208,13 +200,12 @@ func (cs *ConfigServer) Start() {
 }
 
 func main() {
-	log.Printf("Starting up config server.\n")
-
+	// Lets just make a dumb fake root to test with
 	root := &Node {
 		Value: "root val",
 		Children: map[string]*Node {
 			"test1": &Node {
-				Value: "whatever",
+				Value: 91256,
 				Children: map[string]*Node {
 					"test1child1": &Node {
 						Children: map[string]*Node {
