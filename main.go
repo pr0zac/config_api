@@ -67,11 +67,13 @@ func (cs *ConfigServer) FindNode(config string) (*Node, error) {
  */
 func (cs *ConfigServer) Create(w http.ResponseWriter, r *http.Request, p hr.Params) {
 	config := p.ByName("config")[1:]
+	log.Printf("In Create with config: %s", config)
 	node := new(Node)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(node)
+	log.Printf("Node: %v  err: %v", node, err)
 
-	if err == nil {
+	if err != nil {
 		cs.ErrorHandler(w, http.StatusBadRequest, err)
 	} else if config == "" {
 		if cs.Root != nil {
@@ -83,16 +85,17 @@ func (cs *ConfigServer) Create(w http.ResponseWriter, r *http.Request, p hr.Para
 	} else {
 		config, name := path.Split(config)
 		parent, err := cs.FindNode(config)
+		log.Printf("Parent: %v  err: %v", parent, err)
 
-		if err == nil {
+		if err != nil {
+			cs.ErrorHandler(w, http.StatusNotFound, err)
+		} else {
 			if parent.Children[name] != nil {
 				cs.ErrorHandler(w, http.StatusConflict, err)
 			} else {
 				parent.Children[name] = node
 				w.WriteHeader(http.StatusOK)
 			}
-		} else {
-			cs.ErrorHandler(w, http.StatusNotFound, err)
 		}
 	}
 }
@@ -110,11 +113,11 @@ func (cs *ConfigServer) Read(w http.ResponseWriter, r *http.Request, p hr.Params
 	config := p.ByName("config")[1:]
 	node, err := cs.FindNode(config)
 
-	if err == nil {
+	if err != nil {
+		cs.ErrorHandler(w, http.StatusNotFound, err)
+	} else {
 		encoder := json.NewEncoder(w)
 		encoder.Encode(node)
-	} else {
-		cs.ErrorHandler(w, http.StatusNotFound, err)
 	}
 }
 
@@ -129,9 +132,11 @@ func (cs *ConfigServer) Read(w http.ResponseWriter, r *http.Request, p hr.Params
  */
 func (cs *ConfigServer) Update(w http.ResponseWriter, r *http.Request, p hr.Params) {
 	config := p.ByName("config")[1:]
+	log.Printf("In Update with config: %s", config)
 	node := new(Node)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(node)
+	log.Printf("Node: %v  err: %v", node, err)
 
 	if err != nil {
 		cs.ErrorHandler(w, http.StatusBadRequest, err)
@@ -177,15 +182,15 @@ func (cs *ConfigServer) Delete(w http.ResponseWriter, r *http.Request, p hr.Para
 		config, name := path.Split(config)
 		parent, err := cs.FindNode(config)
 
-		if err == nil {
+		if err != nil {
+			cs.ErrorHandler(w, http.StatusNotFound, err)
+		} else {
 			if parent.Children[name] == nil {
 				cs.ErrorHandler(w, http.StatusNotFound, err)
 			} else {
 				delete(parent.Children, name)
 				w.WriteHeader(http.StatusOK)
 			}
-		} else {
-			cs.ErrorHandler(w, http.StatusNotFound, err)
 		}
 	}
 }
@@ -194,9 +199,9 @@ func (cs *ConfigServer) Delete(w http.ResponseWriter, r *http.Request, p hr.Para
  * Start: run the damn thing
  */
 func (cs *ConfigServer) Start() {
-	cs.Router.POST("/*config", cs.Create)
+	cs.Router.PUT("/*config", cs.Create)
 	cs.Router.GET("/*config", cs.Read)
-	cs.Router.PUT("/*config", cs.Update)
+	cs.Router.POST("/*config", cs.Update)
 	cs.Router.DELETE("/*config", cs.Delete)
 
 	http.ListenAndServe(":8080", cs.Router)
@@ -229,5 +234,5 @@ func main() {
 		Root: root,
 	}
 
-	server.start()
+	server.Start()
 }
