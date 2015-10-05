@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	hr "github.com/julienschmidt/httprouter"
+	"log"
 	"net/http"
 	"path"
 	"strings"
@@ -15,7 +15,6 @@ type Node struct {
 }
 
 type ConfigServer struct {
-	Router *hr.Router
 	Root *Node
 }
 
@@ -39,7 +38,7 @@ func (cs *ConfigServer) FindNode(config string) (*Node, error) {
 	node := cs.Root
 	if node != nil {
 		for _, name := range names {
-			if len(name) > 0 { // this check lets us handle trailing /'s
+			if len(name) > 0 { // this check lets us handle extra /'s
 				node = node.Children[name]
 				if node == nil {
 					return nil, fmt.Errorf("Config %s not found", config)
@@ -62,8 +61,8 @@ func (cs *ConfigServer) FindNode(config string) (*Node, error) {
  *   404 if parent node is not found
  *   409 if node already exists
  */
-func (cs *ConfigServer) Create(w http.ResponseWriter, r *http.Request, p hr.Params) {
-	config := p.ByName("config")[1:]
+func (cs *ConfigServer) Create(w http.ResponseWriter, r *http.Request) {
+	config := r.URL.Path[1:]
 	node := new(Node)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(node)
@@ -103,8 +102,9 @@ func (cs *ConfigServer) Create(w http.ResponseWriter, r *http.Request, p hr.Para
  *   400 if unknown error
  *   404 if node is not found
  */
-func (cs *ConfigServer) Read(w http.ResponseWriter, r *http.Request, p hr.Params) {
-	config := p.ByName("config")[1:]
+func (cs *ConfigServer) Read(w http.ResponseWriter, r *http.Request) {
+	log.Printf("request URL: %v", r.URL)
+	config := r.URL.Path[1:]
 	node, err := cs.FindNode(config)
 
 	if err != nil {
@@ -124,8 +124,8 @@ func (cs *ConfigServer) Read(w http.ResponseWriter, r *http.Request, p hr.Params
  *   400 if unknown error
  *   404 if node is not found
  */
-func (cs *ConfigServer) Update(w http.ResponseWriter, r *http.Request, p hr.Params) {
-	config := p.ByName("config")[1:]
+func (cs *ConfigServer) Update(w http.ResponseWriter, r *http.Request) {
+	config := r.URL.Path[1:]
 	node := new(Node)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(node)
@@ -164,8 +164,8 @@ func (cs *ConfigServer) Update(w http.ResponseWriter, r *http.Request, p hr.Para
  *   400 if unknown error
  *   404 if node is not found
  */
-func (cs *ConfigServer) Delete(w http.ResponseWriter, r *http.Request, p hr.Params) {
-	config := p.ByName("config")[1:]
+func (cs *ConfigServer) Delete(w http.ResponseWriter, r *http.Request) {
+	config := r.URL.Path[1:]
 
 	if config == "" {
 		cs.Root = nil
@@ -187,41 +187,57 @@ func (cs *ConfigServer) Delete(w http.ResponseWriter, r *http.Request, p hr.Para
 	}
 }
 
+func (cs *ConfigServer) Handle(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "PUT":
+		cs.Create(w, r)
+	case "POST":
+		cs.Update(w, r)
+	case "DELETE":
+		cs.Delete(w, r)
+	default:
+		cs.Read(w, r)
+	}
+}
+
 /*
  * Start: run the damn thing
  */
 func (cs *ConfigServer) Start() {
+	/*
 	cs.Router.PUT("/*config", cs.Create)
 	cs.Router.GET("/*config", cs.Read)
 	cs.Router.POST("/*config", cs.Update)
-	cs.Router.DELETE("/*config", cs.Delete)
+	cs.Router.DELETE("/*config", cs.Delete)*/
 
-	http.ListenAndServe(":8080", cs.Router)
+	http.HandleFunc("/", cs.Handle)
+	http.ListenAndServe(":8080", nil)
 }
 
 func main() {
-	// Lets just make a dumb fake root to test with
+	child := &Node {
+		Value: 1234567890,
+		Children: map[string]*Node {
+			"test1child2": &Node {
+				Value: []string{"test","testing"},
+			},
+		},
+	}
+
 	root := &Node {
 		Value: "root val",
 		Children: map[string]*Node {
-			"test1": &Node {
-				Value: 91256,
+			"child1": &Node {
+				Value: "I'm a child",
 				Children: map[string]*Node {
-					"test1child1": &Node {
-						Children: map[string]*Node {
-							"test1child2": &Node {
-								Value: "blah",
-							},
-						},
-						Value: "another value",
-					},
+					"child2": child,
 				},
 			},
 		},
 	}
 
+	// Lets just make a dumb fake root to test with
 	server := ConfigServer {
-		Router: hr.New(),
 		Root: root,
 	}
 
